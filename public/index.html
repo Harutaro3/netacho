@@ -298,7 +298,7 @@
     const res = await fetch(`${API}?cat=${g.id}`);
     if (!res.ok) throw new Error(`status ${res.status}`);
     const data = await res.json();
-    return (data.items || []).slice(0, 4).map((x) => ({ ...x, cat: g.label }));
+    return (data.items || []).slice(0, 15).map((x) => ({ ...x, cat: g.label }));
   }
 
   async function startPrep() {

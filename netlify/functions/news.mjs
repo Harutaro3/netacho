@@ -56,7 +56,7 @@ export default async (req) => {
           it.headline &&
           !DARK.some((w) => (it.headline + it.summary).includes(w))
       )
-      .slice(0, 8);
+      .slice(0, 15);
 
     return Response.json(
       { cat, label: feed.label, items },
