@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>ネタ帳</title>
+<meta name="theme-color" content="#17120e" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #17120e;
+    --surface: #221b14;
+    --line: #3a2f21;
+    --amber: #d9a441;
+    --amber-dim: #9c7a35;
+    --text: #ede4d8;
+    --muted: #8a7a68;
+    --ok: #7da65f;
+    --bad: #c97b5a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overscroll-behavior: none; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Zen Kaku Gothic New', -apple-system, sans-serif;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .topbar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    padding: calc(env(safe-area-inset-top) + 12px) 18px 12px;
+    background: linear-gradient(to bottom, rgba(23,18,14,0.96) 55%, rgba(23,18,14,0));
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .logo { font-family: 'Shippori Mincho B1', serif; font-weight: 800; font-size: 17px; letter-spacing: 0.14em; }
+  .tabs { display: flex; gap: 6px; }
+  .tab {
+    background: rgba(34,27,20,0.9); border: 1px solid var(--line); border-radius: 999px;
+    color: var(--muted); font-size: 12.5px; font-family: inherit; font-weight: 500;
+    padding: 6px 14px; cursor: pointer;
+  }
+  .tab.on { background: var(--amber); color: #1d1508; border-color: var(--amber); font-weight: 700; }
+
+  .screen { height: 100dvh; display: none; }
+  .screen.on { display: block; }
+
+  .center {
+    height: 100dvh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px;
+    padding: 26px; text-align: center;
+  }
+  .big-title { font-family: 'Shippori Mincho B1', serif; font-weight: 800; font-size: 42px; letter-spacing: 0.18em; margin: 0; }
+  .lead { color: var(--muted); font-size: 13.5px; line-height: 2; margin: 0; }
+  .go {
+    padding: 16px 46px; border-radius: 999px; border: none; cursor: pointer;
+    background: var(--amber); color: #1d1508; font-size: 16px; font-weight: 700;
+    font-family: inherit; letter-spacing: 0.1em;
+  }
+  .go:active { transform: scale(0.97); }
+  .go.ghost { background: transparent; color: var(--amber); border: 1px solid var(--amber-dim); }
+  .err { color: var(--bad); font-size: 14px; line-height: 1.9; }
+
+  .prep { width: 100%; max-width: 300px; display: flex; flex-direction: column; gap: 10px; text-align: left; }
+  .prep-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 11px 16px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--surface); font-size: 14px;
+  }
+  .prep-row .st { font-size: 12px; color: var(--muted); }
+  .prep-row.done { border-color: var(--amber-dim); }
+  .prep-row.done .st { color: var(--ok); }
+  .prep-row.fail .st { color: var(--bad); }
+
+  .spin {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid var(--line); border-top-color: var(--amber);
+    animation: spin 0.8s linear infinite; display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .feed {
+    height: 100dvh; overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .feed::-webkit-scrollbar { display: none; }
+  .slide {
+    height: 100dvh; scroll-snap-align: start; scroll-snap-stop: always;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 86px 26px 70px; position: relative;
+  }
+  .tag {
+    display: inline-block; align-self: flex-start;
+    font-size: 11px; letter-spacing: 0.2em; color: var(--amber);
+    border: 1px solid var(--amber-dim); border-radius: 999px;
+    padding: 4px 12px; margin-bottom: 18px;
+  }
+  .hl {
+    font-family: 'Shippori Mincho B1', serif;
+    font-weight: 800; font-size: 26px; line-height: 1.45;
+    letter-spacing: 0.02em; margin: 0 0 16px;
+  }
+  .sum { font-size: 15px; line-height: 2.0; opacity: 0.9; margin: 0; }
+  .actions { display: flex; align-items: center; gap: 14px; margin-top: 22px; flex-wrap: wrap; }
+  .srclink {
+    color: var(--amber); font-size: 13.5px; text-decoration: none;
+    border-bottom: 1px solid var(--amber-dim); padding-bottom: 1px;
+  }
+  .save {
+    background: none; border: 1px solid var(--line); border-radius: 999px;
+    color: var(--muted); font-size: 13px; font-family: inherit;
+    padding: 6px 14px; cursor: pointer;
+  }
+  .save.on { border-color: var(--amber); color: var(--amber); }
+  .count {
+    position: absolute; bottom: calc(env(safe-area-inset-bottom) + 20px); right: 26px;
+    font-family: 'Shippori Mincho B1', serif;
+    font-size: 13px; color: var(--muted); letter-spacing: 0.1em;
+  }
+  .hint {
+    position: absolute; bottom: calc(env(safe-area-inset-bottom) + 20px); left: 26px;
+    font-size: 11px; color: var(--muted); letter-spacing: 0.1em;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spin { animation-duration: 2s; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar" id="topbar" style="display:none">
+  <span class="logo">ネタ帳</span>
+  <div class="tabs">
+    <button class="tab on" id="tabToday">今夜</button>
+    <button class="tab" id="tabSaved">保存</button>
+  </div>
+</div>
+
+<!-- 開始画面 -->
+<div class="screen on" id="scrStart">
+  <div class="center">
+    <h1 class="big-title">ネタ帳</h1>
+    <p class="lead" id="dateLabel"></p>
+    <p class="err" id="startErr" style="display:none">仕込み失敗。電波を確認して再試行を。</p>
+    <button class="go" id="btnStart">仕込み開始</button>
+    <button class="go ghost" id="btnSavedShortcut" style="display:none"></button>
+    <p class="lead" style="font-size:12px" id="genreList"></p>
+  </div>
+</div>
+
+<!-- 仕込み中画面 -->
+<div class="screen" id="scrPrep">
+  <div class="center">
+    <p class="lead">仕込み中</p>
+    <div class="prep" id="prepList"></div>
+  </div>
+</div>
+
+<!-- フィード -->
+<div class="screen" id="scrFeed">
+  <div class="feed" id="feedToday"></div>
+  <div class="feed" id="feedSaved" style="display:none"></div>
+</div>
+
+<script>
+(() => {
+  const GENRES = [
+    { id: "keizai",  label: "経済" },
+    { id: "world",   label: "国際" },
+    { id: "kokunai", label: "国内" },
+    { id: "sports",  label: "スポーツ" },
+    { id: "entame",  label: "エンタメ" },
+    { id: "kagaku",  label: "科学" },
+  ];
+  const STORE_KEY = "netacho-saved";
+  const API = "/.netlify/functions/news";
+
+  let items = [];
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); } catch (_) {}
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
+  $("dateLabel").textContent = dateStr;
+  $("genreList").textContent = GENRES.map((g) => g.label).join(" / ");
+
+  const isSaved = (it) => saved.some((s) => s.headline === it.headline);
+  const persist = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(saved)); } catch (_) {} };
+
+  const updateTabs = () => {
+    $("tabToday").textContent = items.length ? `今夜 ${items.length}` : "今夜";
+    $("tabSaved").textContent = saved.length ? `保存 ${saved.length}` : "保存";
+  };
+
+  const updateSavedShortcut = () => {
+    const b = $("btnSavedShortcut");
+    if (saved.length > 0) {
+      b.style.display = "";
+      b.textContent = `保存済み ${saved.length}本`;
+    } else {
+      b.style.display = "none";
+    }
+  };
+  updateSavedShortcut();
+
+  const slideHTML = (it, i, total, withHint) => `
+    <section class="slide">
+      <span class="tag">${esc(it.cat)}${it.savedAt ? " ・ " + esc(it.savedAt) + "保存" : ""}</span>
+      <h2 class="hl">${esc(it.headline)}</h2>
+      <p class="sum">${esc(it.summary)}</p>
+      <div class="actions">
+        ${it.url ? `<a class="srclink" href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">元記事(NHK) →</a>` : ""}
+        <button class="save ${isSaved(it) ? "on" : ""}" data-hl="${esc(it.headline)}">${isSaved(it) ? "★ 保存済" : "☆ 保存"}</button>
+      </div>
+      <span class="count">${String(i + 1).padStart(2, "0")} / ${total}</span>
+      ${withHint ? '<span class="hint">↑ スワイプで次へ</span>' : ""}
+    </section>`;
+
+  const endHTML = (n) => `
+    <section class="slide center" style="height:100dvh">
+      <p class="big-title" style="font-size:26px">仕込み終了</p>
+      <p class="lead">全${n}本</p>
+      <button class="go ghost" id="btnRedo">仕込み直す</button>
+    </section>`;
+
+  const renderToday = () => {
+    const el = $("feedToday");
+    el.innerHTML = items.map((it, i) => slideHTML(it, i, items.length, i === 0)).join("") + endHTML(items.length);
+    const redo = document.getElementById("btnRedo");
+    if (redo) redo.addEventListener("click", startPrep);
+    updateTabs();
+  };
+
+  const renderSaved = () => {
+    const el = $("feedSaved");
+    el.innerHTML = saved.length
+      ? saved.map((it, i) => slideHTML(it, i, saved.length, false)).join("")
+      : `<div class="center"><p class="lead">保存はまだない。<br>気になったネタの ☆ を押すとここに残る。</p></div>`;
+    updateTabs();
+  };
+
+  // 保存トグル(イベント委任)
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".save");
+    if (!btn) return;
+    const hl = btn.getAttribute("data-hl");
+    const src = items.find((x) => x.headline === hl) || saved.find((x) => x.headline === hl);
+    if (!src) return;
+    if (isSaved(src)) {
+      saved = saved.filter((s) => s.headline !== hl);
+    } else {
+      saved.push({ ...src, savedAt: dateStr });
+    }
+    persist();
+    renderToday();
+    renderSaved();
+    updateSavedShortcut();
+  });
+
+  // ジャンルごとの結果を交互に混ぜる
+  const interleave = (buckets) => {
+    const out = [];
+    let added = true, i = 0;
+    while (added) {
+      added = false;
+      for (const b of buckets) {
+        if (i < b.length) { out.push(b[i]); added = true; }
+      }
+      i++;
+    }
+    return out;
+  };
+
+  const show = (id) => {
+    document.querySelectorAll(".screen").forEach((s) => s.classList.remove("on"));
+    $(id).classList.add("on");
+    $("topbar").style.display = id === "scrStart" ? "none" : "flex";
+  };
+
+  const switchTab = (which) => {
+    $("tabToday").classList.toggle("on", which === "today");
+    $("tabSaved").classList.toggle("on", which === "saved");
+    $("feedToday").style.display = which === "today" ? "" : "none";
+    $("feedSaved").style.display = which === "saved" ? "" : "none";
+  };
+  $("tabToday").addEventListener("click", () => switchTab("today"));
+  $("tabSaved").addEventListener("click", () => switchTab("saved"));
+
+  async function fetchGenre(g) {
+    const res = await fetch(`${API}?cat=${g.id}`);
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const data = await res.json();
+    return (data.items || []).slice(0, 4).map((x) => ({ ...x, cat: g.label }));
+  }
+
+  async function startPrep() {
+    show("scrPrep");
+    switchTab("today");
+    $("startErr").style.display = "none";
+    $("prepList").innerHTML = GENRES.map((g) =>
+      `<div class="prep-row" id="prep-${g.id}"><span>${g.label}</span><span class="st"><span class="spin"></span></span></div>`
+    ).join("");
+
+    const results = await Promise.all(
+      GENRES.map(async (g) => {
+        const row = () => document.getElementById(`prep-${g.id}`);
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const r = await fetchGenre(g);
+            row().classList.add("done");
+            row().querySelector(".st").textContent = "完了";
+            return r;
+          } catch (err) {
+            if (attempt === 0) await new Promise((res2) => setTimeout(res2, 1200));
+          }
+        }
+        row().classList.add("fail");
+        row().querySelector(".st").textContent = "失敗";
+        return [];
+      })
+    );
+
+    const seen = new Set();
+    const buckets = results.map((arr) =>
+      arr.filter((x) => {
+        if (seen.has(x.headline)) return false;
+        seen.add(x.headline);
+        return true;
+      })
+    );
+    items = interleave(buckets);
+
+    if (items.length === 0) {
+      show("scrStart");
+      $("startErr").style.display = "";
+      return;
+    }
+    renderToday();
+    renderSaved();
+    show("scrFeed");
+    $("feedToday").scrollTop = 0;
+  }
+
+  $("btnStart").addEventListener("click", startPrep);
+  $("btnSavedShortcut").addEventListener("click", () => {
+    renderSaved();
+    show("scrFeed");
+    switchTab("saved");
+  });
+})();
+</script>
+</body>
+</html>

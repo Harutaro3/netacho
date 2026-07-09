@@ -1,0 +1,8 @@
+# ネタ帳 — Netlify設定
+# ビルド工程なし。publicをそのまま配信し、netlify/functionsを関数として使う。
+
+[build]
+  publish = "public"
+
+[functions]
+  directory = "netlify/functions"
