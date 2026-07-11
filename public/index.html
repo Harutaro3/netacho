@@ -63,6 +63,15 @@
   .go.ghost { background: transparent; color: var(--amber); border: 1px solid var(--amber-dim); }
   .err { color: var(--bad); font-size: 14px; line-height: 1.9; }
 
+  .ranges { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .rng {
+    background: var(--surface); border: none; color: var(--muted);
+    font-family: inherit; font-size: 14px; font-weight: 500;
+    padding: 10px 22px; cursor: pointer;
+  }
+  .rng + .rng { border-left: 1px solid var(--line); }
+  .rng.on { background: var(--amber); color: #1d1508; font-weight: 700; }
+
   .prep { width: 100%; max-width: 300px; display: flex; flex-direction: column; gap: 10px; text-align: left; }
   .prep-row {
     display: flex; align-items: center; justify-content: space-between;
@@ -125,6 +134,20 @@
     font-size: 11px; color: var(--muted); letter-spacing: 0.1em;
   }
 
+  /* 単語選択→Wiki検索の浮きボタン */
+  .wikibtn {
+    display: none;
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: calc(env(safe-area-inset-bottom) + 64px);
+    z-index: 20;
+    background: var(--amber); color: #1d1508;
+    border: none; border-radius: 999px;
+    font-family: inherit; font-size: 13.5px; font-weight: 700;
+    padding: 11px 20px; cursor: pointer;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.5);
+    max-width: 86vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .spin { animation-duration: 2s; }
   }
@@ -145,17 +168,23 @@
   <div class="center">
     <h1 class="big-title">ネタ帳</h1>
     <p class="lead" id="dateLabel"></p>
+    <div class="ranges" id="ranges">
+      <button class="rng on" data-r="today">当日</button>
+      <button class="rng" data-r="week">当週</button>
+      <button class="rng" data-r="month">当月</button>
+    </div>
     <p class="err" id="startErr" style="display:none">仕込み失敗。電波を確認して再試行を。</p>
     <button class="go" id="btnStart">仕込み開始</button>
     <button class="go ghost" id="btnSavedShortcut" style="display:none"></button>
     <p class="lead" style="font-size:12px" id="genreList"></p>
+    <p class="lead" style="font-size:11px">記事の単語を長押しで選ぶと、Wikipediaで調べられる</p>
   </div>
 </div>
 
 <!-- 仕込み中画面 -->
 <div class="screen" id="scrPrep">
   <div class="center">
-    <p class="lead">仕込み中</p>
+    <p class="lead" id="prepTitle">仕込み中</p>
     <div class="prep" id="prepList"></div>
   </div>
 </div>
@@ -165,6 +194,8 @@
   <div class="feed" id="feedToday"></div>
   <div class="feed" id="feedSaved" style="display:none"></div>
 </div>
+
+<button class="wikibtn" id="wikiBtn"></button>
 
 <script>
 (() => {
@@ -176,11 +207,13 @@
     { id: "entame",  label: "エンタメ" },
     { id: "kagaku",  label: "科学" },
   ];
+  const RANGE_LABEL = { today: "当日", week: "当週", month: "当月" };
   const STORE_KEY = "netacho-saved";
   const API = "/.netlify/functions/news";
 
   let items = [];
   let saved = [];
+  let range = "today";
   try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); } catch (_) {}
 
   const $ = (id) => document.getElementById(id);
@@ -191,6 +224,13 @@
   const dateStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
   $("dateLabel").textContent = dateStr;
   $("genreList").textContent = GENRES.map((g) => g.label).join(" / ");
+
+  const fmtDate = (pubDate) => {
+    const t = Date.parse(pubDate);
+    if (!t) return "";
+    const d = new Date(t);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  };
 
   const isSaved = (it) => saved.some((s) => s.headline === it.headline);
   const persist = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(saved)); } catch (_) {} };
@@ -211,9 +251,17 @@
   };
   updateSavedShortcut();
 
+  // 期間選択
+  $("ranges").addEventListener("click", (e) => {
+    const btn = e.target.closest(".rng");
+    if (!btn) return;
+    range = btn.getAttribute("data-r");
+    document.querySelectorAll(".rng").forEach((b) => b.classList.toggle("on", b === btn));
+  });
+
   const slideHTML = (it, i, total, withHint) => `
     <section class="slide">
-      <span class="tag">${esc(it.cat)}${it.savedAt ? " ・ " + esc(it.savedAt) + "保存" : ""}</span>
+      <span class="tag">${esc(it.cat)}${it.pubDate ? " ・ " + fmtDate(it.pubDate) : ""}${it.savedAt ? " ・ " + esc(it.savedAt) + "保存" : ""}</span>
       <h2 class="hl">${esc(it.headline)}</h2>
       <p class="sum">${esc(it.summary)}</p>
       <div class="actions">
@@ -227,15 +275,15 @@
   const endHTML = (n) => `
     <section class="slide center" style="height:100dvh">
       <p class="big-title" style="font-size:26px">仕込み終了</p>
-      <p class="lead">全${n}本</p>
-      <button class="go ghost" id="btnRedo">仕込み直す</button>
+      <p class="lead">${RANGE_LABEL[range]}・全${n}本</p>
+      <button class="go ghost" id="btnBackTop">最初に戻る</button>
     </section>`;
 
   const renderToday = () => {
     const el = $("feedToday");
     el.innerHTML = items.map((it, i) => slideHTML(it, i, items.length, i === 0)).join("") + endHTML(items.length);
-    const redo = document.getElementById("btnRedo");
-    if (redo) redo.addEventListener("click", startPrep);
+    const back = document.getElementById("btnBackTop");
+    if (back) back.addEventListener("click", () => show("scrStart"));
     updateTabs();
   };
 
@@ -265,20 +313,6 @@
     updateSavedShortcut();
   });
 
-  // ジャンルごとの結果を交互に混ぜる
-  const interleave = (buckets) => {
-    const out = [];
-    let added = true, i = 0;
-    while (added) {
-      added = false;
-      for (const b of buckets) {
-        if (i < b.length) { out.push(b[i]); added = true; }
-      }
-      i++;
-    }
-    return out;
-  };
-
   const show = (id) => {
     document.querySelectorAll(".screen").forEach((s) => s.classList.remove("on"));
     $(id).classList.add("on");
@@ -295,16 +329,17 @@
   $("tabSaved").addEventListener("click", () => switchTab("saved"));
 
   async function fetchGenre(g) {
-    const res = await fetch(`${API}?cat=${g.id}`);
+    const res = await fetch(`${API}?cat=${g.id}&range=${range}`);
     if (!res.ok) throw new Error(`status ${res.status}`);
     const data = await res.json();
-    return (data.items || []).slice(0, 15).map((x) => ({ ...x, cat: g.label }));
+    return (data.items || []).map((x) => ({ ...x, cat: g.label }));
   }
 
   async function startPrep() {
     show("scrPrep");
     switchTab("today");
     $("startErr").style.display = "none";
+    $("prepTitle").textContent = `仕込み中(${RANGE_LABEL[range]})`;
     $("prepList").innerHTML = GENRES.map((g) =>
       `<div class="prep-row" id="prep-${g.id}"><span>${g.label}</span><span class="st"><span class="spin"></span></span></div>`
     ).join("");
@@ -316,7 +351,7 @@
           try {
             const r = await fetchGenre(g);
             row().classList.add("done");
-            row().querySelector(".st").textContent = "完了";
+            row().querySelector(".st").textContent = `${r.length}本`;
             return r;
           } catch (err) {
             if (attempt === 0) await new Promise((res2) => setTimeout(res2, 1200));
@@ -328,15 +363,13 @@
       })
     );
 
+    // ジャンル順に並べる(経済→国際→国内→スポーツ→エンタメ→科学)
     const seen = new Set();
-    const buckets = results.map((arr) =>
-      arr.filter((x) => {
-        if (seen.has(x.headline)) return false;
-        seen.add(x.headline);
-        return true;
-      })
-    );
-    items = interleave(buckets);
+    items = results.flat().filter((x) => {
+      if (seen.has(x.headline)) return false;
+      seen.add(x.headline);
+      return true;
+    });
 
     if (items.length === 0) {
       show("scrStart");
@@ -354,6 +387,36 @@
     renderSaved();
     show("scrFeed");
     switchTab("saved");
+  });
+
+  // ---- 単語選択 → Wikipedia検索 ----
+  const wikiBtn = $("wikiBtn");
+  let lastTerm = "";
+
+  document.addEventListener("selectionchange", () => {
+    const sel = window.getSelection();
+    const t = sel ? sel.toString().trim() : "";
+    if (t && t.length >= 1 && t.length <= 20 && !t.includes("\n")) {
+      lastTerm = t;
+      const label = t.length > 10 ? t.slice(0, 10) + "…" : t;
+      wikiBtn.textContent = `「${label}」をWikipediaで調べる`;
+      wikiBtn.style.display = "block";
+    } else {
+      wikiBtn.style.display = "none";
+    }
+  });
+
+  // ボタンを押しても選択が消えないように
+  wikiBtn.addEventListener("pointerdown", (e) => e.preventDefault());
+  wikiBtn.addEventListener("click", () => {
+    if (lastTerm) {
+      window.open(
+        `https://ja.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(lastTerm)}`,
+        "_blank",
+        "noopener"
+      );
+    }
+    wikiBtn.style.display = "none";
   });
 })();
 </script>
