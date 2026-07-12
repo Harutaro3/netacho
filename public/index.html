@@ -148,6 +148,42 @@
     max-width: 86vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
+  /* Wikipediaパネル(下からスライドイン) */
+  .wikipanel {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    height: 78dvh; z-index: 30;
+    background: var(--bg);
+    border-top: 1px solid var(--amber-dim);
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -8px 30px rgba(0,0,0,0.5);
+    display: flex; flex-direction: column;
+    transform: translateY(100%);
+    transition: transform .28s ease;
+  }
+  .wikipanel.open { transform: translateY(0); }
+  .wikipanel-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 1px solid var(--line);
+    flex: 0 0 auto;
+  }
+  .wikipanel-title {
+    font-size: 13.5px; color: var(--text); font-weight: 700;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70vw;
+  }
+  .wikipanel-actions { display: flex; gap: 8px; }
+  .wikipanel-btn {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+    color: var(--muted); font-size: 12px; font-family: inherit;
+    padding: 6px 13px; cursor: pointer;
+  }
+  .wikipanel-frame { flex: 1 1 auto; border: none; width: 100%; background: #fff; }
+  .wikipanel-backdrop {
+    position: fixed; inset: 0; z-index: 29;
+    background: rgba(0,0,0,0.5);
+    display: none;
+  }
+  .wikipanel-backdrop.open { display: block; }
+
   @media (prefers-reduced-motion: reduce) {
     .spin { animation-duration: 2s; }
   }
@@ -196,6 +232,18 @@
 </div>
 
 <button class="wikibtn" id="wikiBtn"></button>
+
+<div class="wikipanel-backdrop" id="wikiBackdrop"></div>
+<div class="wikipanel" id="wikiPanel">
+  <div class="wikipanel-bar">
+    <span class="wikipanel-title" id="wikiTitle">Wikipedia</span>
+    <div class="wikipanel-actions">
+      <button class="wikipanel-btn" id="wikiOpenExternal">外部で開く</button>
+      <button class="wikipanel-btn" id="wikiClose">閉じる ✕</button>
+    </div>
+  </div>
+  <iframe class="wikipanel-frame" id="wikiFrame" title="Wikipedia"></iframe>
+</div>
 
 <script>
 (() => {
@@ -389,26 +437,52 @@
     switchTab("saved");
   });
 
-  // ---- 単語選択 → Wikipedia検索 ----
+  // ---- 単語選択 → サイト内Wikipediaパネル ----
   const wikiBtn = $("wikiBtn");
+  const wikiPanel = $("wikiPanel");
+  const wikiBackdrop = $("wikiBackdrop");
+  const wikiFrame = $("wikiFrame");
+  const wikiTitle = $("wikiTitle");
+  const wikiOpenExternal = $("wikiOpenExternal");
+  const wikiClose = $("wikiClose");
   let lastTerm = "";
 
   document.addEventListener("selectionchange", () => {
+    if (wikiPanel.classList.contains("open")) return; // パネル表示中は誤爆防止
     const sel = window.getSelection();
     const t = sel ? sel.toString().trim() : "";
     if (t && t.length >= 1 && t.length <= 20 && !t.includes("\n")) {
       lastTerm = t;
       const label = t.length > 10 ? t.slice(0, 10) + "…" : t;
-      wikiBtn.textContent = `「${label}」をWikipediaで調べる`;
+      wikiBtn.textContent = `「${label}」を調べる`;
       wikiBtn.style.display = "block";
     } else {
       wikiBtn.style.display = "none";
     }
   });
 
+  const openWiki = (term) => {
+    wikiTitle.textContent = term;
+    // モバイル向けページを直接指定。項目が無ければWikipedia側の案内が出る。
+    wikiFrame.src = `https://ja.m.wikipedia.org/wiki/${encodeURIComponent(term)}`;
+    wikiPanel.classList.add("open");
+    wikiBackdrop.classList.add("open");
+    wikiBtn.style.display = "none";
+  };
+  const closeWiki = () => {
+    wikiPanel.classList.remove("open");
+    wikiBackdrop.classList.remove("open");
+    wikiFrame.src = "about:blank";
+  };
+
   // ボタンを押しても選択が消えないように
   wikiBtn.addEventListener("pointerdown", (e) => e.preventDefault());
   wikiBtn.addEventListener("click", () => {
+    if (lastTerm) openWiki(lastTerm);
+  });
+  wikiClose.addEventListener("click", closeWiki);
+  wikiBackdrop.addEventListener("click", closeWiki);
+  wikiOpenExternal.addEventListener("click", () => {
     if (lastTerm) {
       window.open(
         `https://ja.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(lastTerm)}`,
@@ -416,7 +490,6 @@
         "noopener"
       );
     }
-    wikiBtn.style.display = "none";
   });
 })();
 </script>
