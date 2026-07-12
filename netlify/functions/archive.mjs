@@ -72,7 +72,7 @@ export default async () => {
     }
   }
   console.log("archive report:", JSON.stringify(report));
-  return new Response("ok");
+  return Response.json({ ok: true, report });
 };
 
 export const config = {

@@ -73,12 +73,16 @@ export default async (req) => {
 
     // 貯金(Blobsが使えない環境でも当日表示は生かす)
     let merged = live;
+    let blobsStatus = "ok";
+    let blobsError = null;
     try {
       const store = getStore("netacho-archive");
       const old = (await store.get(`arc-${cat}`, { type: "json" })) || [];
       merged = merge(old, live);
       await store.setJSON(`arc-${cat}`, merged);
     } catch (e) {
+      blobsStatus = "failed";
+      blobsError = String(e);
       console.error("blobs unavailable:", e);
     }
 
@@ -94,11 +98,47 @@ export default async (req) => {
         })
         .slice(0, cap);
     } else {
-      items = live;
+      // 当日: 日本時間の暦日で一致するものだけに絞る(サーバーはUTCで動くため明示変換)
+      const toJstYMD = (ms) => {
+        const jst = new Date(ms + 9 * 3600000); // UTC→JST(+9h)
+        return `${jst.getUTCFullYear()}-${jst.getUTCMonth()}-${jst.getUTCDate()}`;
+      };
+      const todayKey = toJstYMD(Date.now());
+      const isToday = (pubDate) => {
+        const t = Date.parse(pubDate);
+        return t ? toJstYMD(t) === todayKey : false;
+      };
+      const todays = live.filter((it) => isToday(it.pubDate));
+      // 当日分が極端に少ないジャンル(更新が少ない科学等)向けの保険:
+      // 0件なら直近24時間以内のものだけ許容する
+      if (todays.length > 0) {
+        items = todays;
+      } else {
+        const cutoff24h = Date.now() - 24 * 3600000;
+        items = live.filter((it) => {
+          const t = Date.parse(it.pubDate);
+          return !t || t >= cutoff24h;
+        });
+      }
     }
 
+    const oldest = merged.length
+      ? merged.reduce((a, b) => (Date.parse(a.pubDate) < Date.parse(b.pubDate) ? a : b))
+      : null;
+
     return Response.json(
-      { cat, label: feed.label, range, items },
+      {
+        cat,
+        label: feed.label,
+        range,
+        items,
+        _debug: {
+          blobsStatus,
+          blobsError,
+          archiveTotal: merged.length,
+          archiveOldestDate: oldest ? oldest.pubDate : null,
+        },
+      },
       { headers: { "cache-control": "public, max-age=300" } }
     );
   } catch (e) {
